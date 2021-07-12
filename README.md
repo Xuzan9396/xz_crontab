@@ -21,9 +21,15 @@ Year           No           1970–2099         * / , -
 
 2. 例子：
 ```go
-func Test_crontab(t *testing.T)  {
+package main
 
-	jobs := []Job{
+import (
+	"github.com/Xuzan9396/xz_crontab"
+	"log"
+)
+
+func main()  {
+	jobs := []xz_crontab.Job{
 		{
 			Name:     "脚本名字1",
 			Par:  "1",
@@ -43,11 +49,12 @@ func Test_crontab(t *testing.T)  {
 		},
 
 	}
-	InitCrontab(jobs)
+	xz_crontab.InitCrontab(jobs)
 }
 
-func callback(par ...interface{})(err error )  {
-	log.Println("回调参数",par[0],par[1])
+
+func callback(par ...interface{})(err error ) {
+	log.Println("回调参数", par[0], par[1])
 	return
 }
 ```

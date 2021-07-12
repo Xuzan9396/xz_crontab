@@ -1,26 +1,10 @@
-# xz_crontab
-定时脚本任务
+package xz_crontab
 
-## 使用
+import (
+	"log"
+	"testing"
+)
 
-1. 设置脚本定时时间
-
-crontab 规则
-https://github.com/gorhill/cronexpr
-```
-Field name     Mandatory?   Allowed values    Allowed special characters
-----------     ----------   --------------    --------------------------
-Seconds        No           0-59              * / , -
-Minutes        Yes          0-59              * / , -
-Hours          Yes          0-23              * / , -
-Day of month   Yes          1-31              * / , - L W
-Month          Yes          1-12 or JAN-DEC   * / , -
-Day of week    Yes          0-6 or SUN-SAT    * / , - L #
-Year           No           1970–2099         * / , -
-```
-
-2. 例子：
-```go
 func Test_crontab(t *testing.T)  {
 
 	jobs := []Job{
@@ -50,4 +34,3 @@ func callback(par ...interface{})(err error )  {
 	log.Println("回调参数",par[0],par[1])
 	return
 }
-```

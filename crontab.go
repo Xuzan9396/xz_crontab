@@ -19,13 +19,13 @@ type JobSchedulerPlan struct {
 }
 
 type Job struct {
-	Name     string `json:"name"`     // 任务名
-	Par  string `json:"Par"`  // 额外参数
-	CronExpr string `json:"cronExpr"` // cron 表达式
+	Name     string      // 任务名
+	Par  string   // 额外参数
+	CronExpr string // cron 表达式
 	IsOpen   bool
+	IsSkip bool  // 如果为true 忽视重复
 	Callback  func(par ...interface{}) (err error)
 }
-
 
 // 执行的结果
 type JobResult struct {
@@ -151,14 +151,16 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 		log.Println(jobPlan.Job.Name, "下次执行的时间", datetime)
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
 
-
 			// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
 
-			// 如果任务正在执行，跳过本次调度
-			if _, jobExecuting := g_jobexecuting[jobPlan.Job.Name]; jobExecuting {
-				log.Printf("尚未退出,跳过执行:%s", jobPlan.Job.Name)
-				continue
+			if jobPlan.Job.IsSkip == false{
+				// 如果任务正在执行，跳过本次调度
+				if _, jobExecuting := g_jobexecuting[jobPlan.Job.Name]; jobExecuting {
+					log.Printf("尚未退出,跳过执行:%s", jobPlan.Job.Name)
+					continue
+				}
 			}
+
 			// 保存执行状态
 			g_jobexecuting[jobPlan.Job.Name] = jobPlan.Job.Name
 

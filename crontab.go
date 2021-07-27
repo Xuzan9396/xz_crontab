@@ -150,11 +150,17 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 			if jobPlan.Job.Callback == nil {
 				continue
 			}
-
-			err := jobPlan.Job.Callback(jobPlan.Job.Name,jobPlan.Job.Par)
-			if err != nil {
-				log.Println(jobPlan.Job.Name,err)
-			}
+			go func() {
+				defer func() {
+						if r := recover(); r != nil {
+							log.Println(errors.New("灾难错误"), r)
+						}
+					}()
+				err := jobPlan.Job.Callback(jobPlan.Job.Name,jobPlan.Job.Par,datetime)
+				if err != nil {
+					log.Println(jobPlan.Job.Name,err)
+				}
+			}()
 
 
 			// 更新下次执行时间

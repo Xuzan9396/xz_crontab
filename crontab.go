@@ -26,9 +26,23 @@ type Job struct {
 	Callback  func(par ...interface{}) (err error)
 }
 
+
+// 执行的结果
+type JobResult struct {
+	Name string 
+	Err          error // 错误
+	StartTing    time.Time
+	EndTime      time.Time
+}
+
+
 type Scheduler struct {
 	jobPlanTable map[string]*JobSchedulerPlan // 执行计划表
 }
+
+
+var g_jobexecuting map[string]string
+var g_JobResult_chan chan *JobResult
 
 func InitCrontab(jobs []Job) {
 	defer func() {
@@ -36,22 +50,14 @@ func InitCrontab(jobs []Job) {
 			fmt.Println(err)
 		}
 	}()
+	g_jobexecuting = make(map[string]string)
+	g_JobResult_chan = make(chan *JobResult,100)
 
 	model := &Scheduler{
 		jobPlanTable: make(map[string]*JobSchedulerPlan),
 	}
 
-	// 可以从配置项里面获取
-	//jobs := []Job{
-	//	{
-	//		Name:     "split_file",
-	//		Par:  "1",
-	//		CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
-	//		IsOpen: true,
-	//		//Callback: xxxx  // 设置你调用的函数
-	//	},
-	//
-	//}
+
 
 	for _, job := range jobs {
 		if job.IsOpen {
@@ -59,10 +65,8 @@ func InitCrontab(jobs []Job) {
 		}
 
 	}
-	//log.Println(model.jobPlanTable);
 
 	model.SchedulerLoop()
-	//return model
 }
 
 // 构建任务执行计划
@@ -107,7 +111,8 @@ func (scheduler *Scheduler) SchedulerLoop() {
 	for {
 		select {
 		case <-schedulerTimer.C:
-
+		case result := <-g_JobResult_chan:
+			dealResult(result)
 		}
 
 		// 重新调度一次任务
@@ -147,6 +152,17 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
 
 
+			// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
+
+			// 如果任务正在执行，跳过本次调度
+			if _, jobExecuting := g_jobexecuting[jobPlan.Job.Name]; jobExecuting {
+				log.Println("尚未退出,跳过执行:%s", jobPlan.Job.Name)
+				continue
+			}
+			// 保存执行状态
+			g_jobexecuting[jobPlan.Job.Name] = jobPlan.Job.Name
+
+
 			if jobPlan.Job.Callback == nil {
 				continue
 			}
@@ -156,10 +172,15 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 							log.Println(errors.New("灾难错误"), r)
 						}
 					}()
+			    startTing :=   time.Now()
 				err := jobPlan.Job.Callback(jobPlan.Job.Name,jobPlan.Job.Par,datetime)
 				if err != nil {
 					log.Println(jobPlan.Job.Name,err)
 				}
+				endTime :=     time.Now()
+
+				pushg_JobResult_chan(jobPlan.Job.Name,startTing,endTime,err)
+				
 			}()
 
 
@@ -177,4 +198,18 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 	schedulerAfter = (*nearTime).Sub(now)
 
 	return
+}
+
+func pushg_JobResult_chan(name string,startTime,endTime time.Time,err error )  {
+	g_JobResult_chan <- &JobResult{
+		Name: name,
+		StartTing: startTime,
+		EndTime: endTime,
+		Err: err,
+	}
+}
+
+func dealResult(result *JobResult)  {
+	delete(g_jobexecuting,result.Name)
+	log.Println("执行时间",result.EndTime.Unix() - result.EndTime.Unix())
 }

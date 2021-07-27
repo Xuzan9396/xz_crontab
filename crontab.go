@@ -156,7 +156,7 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 
 			// 如果任务正在执行，跳过本次调度
 			if _, jobExecuting := g_jobexecuting[jobPlan.Job.Name]; jobExecuting {
-				log.Println("尚未退出,跳过执行:%s", jobPlan.Job.Name)
+				log.Printf("尚未退出,跳过执行:%s", jobPlan.Job.Name)
 				continue
 			}
 			// 保存执行状态

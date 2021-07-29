@@ -43,6 +43,10 @@ type Scheduler struct {
 
 var g_jobexecuting map[string]string
 var g_JobResult_chan chan *JobResult
+func init()  {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+
+}
 
 func InitCrontab(jobs []Job) {
 	defer func() {
@@ -148,27 +152,24 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 		}
 		timeLayout := "2006-01-02 15:04:05" //转化所需模板
 		datetime := time.Unix(jobPlan.NextTime.Unix(), 0).Format(timeLayout)
-		log.Println(jobPlan.Job.Name, "下次执行的时间", datetime)
+		//log.Println(jobPlan.Job.Name, "下次执行的时间", datetime)
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
 
 			// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
-
 			if jobPlan.Job.IsSkip == false{
 				// 如果任务正在执行，跳过本次调度
 				if _, jobExecuting := g_jobexecuting[jobPlan.Job.Name]; jobExecuting {
 					log.Printf("尚未退出,跳过执行:%s", jobPlan.Job.Name)
-					continue
+					goto LOOP
 				}
 			}
-
+			if jobPlan.Job.Callback == nil {
+				goto LOOP
+			}
 			// 保存执行状态
 			g_jobexecuting[jobPlan.Job.Name] = jobPlan.Job.Name
 
-
-			if jobPlan.Job.Callback == nil {
-				continue
-			}
-			go func() {
+			go func(jobPlan *JobSchedulerPlan) { // go 需要传值进来
 				defer func() {
 						if r := recover(); r != nil {
 							log.Println(errors.New("灾难错误"), r)
@@ -183,8 +184,8 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 
 				pushg_JobResult_chan(jobPlan.Job.Name,startTing,endTime,err)
 				
-			}()
-
+			}(jobPlan)
+			LOOP:
 
 			// 更新下次执行时间
 			jobPlan.NextTime = jobPlan.Expr.Next(now)
@@ -198,7 +199,7 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 
 	// 睡眠多少时间
 	schedulerAfter = (*nearTime).Sub(now)
-
+	//log.Println("schedulerAfter",schedulerAfter)
 	return
 }
 
@@ -213,5 +214,5 @@ func pushg_JobResult_chan(name string,startTime,endTime time.Time,err error )  {
 
 func dealResult(result *JobResult)  {
 	delete(g_jobexecuting,result.Name)
-	log.Println("执行时间",result.EndTime.Unix() - result.EndTime.Unix())
+	//log.Println("执行时间删除",result.EndTime.Unix() - result.EndTime.Unix(),result.Name)
 }

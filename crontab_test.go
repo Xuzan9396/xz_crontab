@@ -28,7 +28,16 @@ func Test_crontab(t *testing.T)  {
 		},
 
 	}
-	InitCrontab(jobs)
+	model := InitCrontab(jobs)
+
+	time.Sleep(20*time.Second)
+	model.Stop()
+
+	select {
+
+	}
+
+
 }
 
 func callback(par ...interface{})(err error )  {

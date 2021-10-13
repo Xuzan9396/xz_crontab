@@ -1,12 +1,11 @@
 package xz_crontab
 
-
-
 import (
 	"errors"
 	"fmt"
 	"github.com/gorhill/cronexpr"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -38,6 +37,10 @@ type JobResult struct {
 
 type Scheduler struct {
 	jobPlanTable map[string]*JobSchedulerPlan // 执行计划表
+	is_stop bool
+	sync.RWMutex
+	//ctx context.Context
+	//cancel context.CancelFunc
 }
 
 
@@ -48,17 +51,17 @@ func init()  {
 
 }
 
-func InitCrontab(jobs []Job) {
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println(err)
-		}
-	}()
+func InitCrontab(jobs []Job) (*Scheduler){
+
 	g_jobexecuting = make(map[string]string)
 	g_JobResult_chan = make(chan *JobResult,100)
+	//ctx, cancel := context.WithCancel(context.Background())
 
 	model := &Scheduler{
 		jobPlanTable: make(map[string]*JobSchedulerPlan),
+		is_stop: false,
+		//ctx: ctx,
+		//cancel: cancel,
 	}
 
 
@@ -70,7 +73,8 @@ func InitCrontab(jobs []Job) {
 
 	}
 
-	model.SchedulerLoop()
+	go model.SchedulerLoop()
+	return model
 }
 
 // 构建任务执行计划
@@ -100,6 +104,11 @@ func BuildSchedulerPlan(job Job) (jobSchedulerPlan *JobSchedulerPlan, err error)
 
 // 调度协程
 func (scheduler *Scheduler) SchedulerLoop() {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
 	// 定时任务
 	var (
 		schedulerAfter time.Duration
@@ -155,6 +164,10 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 		//log.Println(jobPlan.Job.Name, "下次执行的时间", datetime)
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
 
+			if scheduler.getStop() {
+				log.Println("脚本停止了，请检查数据是否跑完!")
+				goto LOOP
+			}
 			// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
 			if jobPlan.Job.IsSkip == false{
 				// 如果任务正在执行，跳过本次调度
@@ -175,6 +188,7 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 							log.Println(errors.New("灾难错误"), r)
 						}
 					}()
+
 			    startTing :=   time.Now()
 				err := jobPlan.Job.Callback(jobPlan.Job.Name,jobPlan.Job.Par,datetime)
 				if err != nil {
@@ -215,4 +229,26 @@ func pushg_JobResult_chan(name string,startTime,endTime time.Time,err error )  {
 func dealResult(result *JobResult)  {
 	delete(g_jobexecuting,result.Name)
 	//log.Println("执行时间删除",result.EndTime.Unix() - result.EndTime.Unix(),result.Name)
+}
+
+// 关闭脚本
+func (scheduler *Scheduler) getStop() bool {
+	scheduler.RLock()
+	defer scheduler.RUnlock()
+	return scheduler.is_stop
+}
+
+
+// 关闭脚本
+func (scheduler *Scheduler) Stop()  {
+	scheduler.Lock()
+	defer scheduler.Unlock()
+	scheduler.is_stop = true
+}
+
+
+func (scheduler *Scheduler) Start()  {
+	scheduler.Lock()
+	defer scheduler.Unlock()
+	scheduler.is_stop = false
 }

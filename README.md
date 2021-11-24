@@ -25,41 +25,83 @@ Year           No           1970–2099         * / , -
 **2 示例代码**
 
 ```go
-package main
+package xz_crontab
 
 import (
-	"github.com/Xuzan9396/xz_crontab"
+	"context"
 	"log"
+	"testing"
+	"time"
 )
 
-func main()  {
-	jobs := []xz_crontab.Job{
+func Test_crontab(t *testing.T)  {
+
+	jobs := []Job{
 		{
-			Name:     "脚本名字1",
+			Name:     "test",
 			Par:  "1",
 			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
 			CronExpr: "*/5 * * * * * *", // 5s执行一次
-			IsOpen: true, // true 开启脚本 false 关闭脚本
+			IsOpen: false, // true 开启脚本 false 关闭脚本
 			Callback: callback,  // 设置你调用的函数
 		},
 
 		{
-			Name:     "脚本名字2",
+			Name:     "test2",
 			Par:  "1",
 			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
-			CronExpr: "*/5 * * * * * *", // 5s执行一次
-			IsOpen: true, // true 开启脚本 false 关闭脚本
+			CronExpr: "*/11 * * * * * *", // 5s执行一次
+			IsOpen: false, // true 开启脚本 false 关闭脚本
 			Callback: callback,  // 设置你调用的函数
+		},
+
+		{
+			Name:     "test3",
+			Par:  "1",
+			IsOpen: true, // true 开启脚本 false 关闭脚本
+			Callback: OnceTest2,  // 设置你调用的函数
+			Once: true, // 只执行一次
 		},
 
 	}
-	xz_crontab.InitCrontab(jobs)
+	model := InitCrontab(jobs)
+
+	time.Sleep(20*time.Second)
+	model.Stop()
+
+	select {
+
+	}
+
+
+}
+
+func OnceTest(par ...interface{})(err error)  {
+	log.Println("只执行一次")
+	return nil
 }
 
 
-func callback(par ...interface{})(err error ) {
-	// par[0] 代表脚本名称， par[1] 代表Par额外参数
-	log.Println("回调参数", par[0], par[1])
+func OnceTest2(par ...interface{})(err error)  {
+	res := par[2].(context.Context)
+	for{
+		select {
+		case <-res.Done():
+			log.Println("停止了!")
+			return
+		default:
+			log.Println("只执行一次")
+			time.Sleep(time.Second)
+
+		}
+	}
+	return
+}
+
+
+func callback(par ...interface{})(err error )  {
+	log.Println("回调参数",par[0],par[1])
+	time.Sleep(6*time.Second)
 	return
 }
 ```

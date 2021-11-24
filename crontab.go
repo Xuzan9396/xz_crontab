@@ -1,6 +1,7 @@
 package xz_crontab
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/gorhill/cronexpr"
@@ -14,16 +15,18 @@ type JobSchedulerPlan struct {
 	Job      *Job
 	Expr     *cronexpr.Expression // 解析好的cronnxpr 表达式
 	NextTime time.Time
-
 }
+
+
 
 type Job struct {
 	Name     string      // 任务名
 	Par  string   // 额外参数
 	CronExpr string // cron 表达式
 	IsOpen   bool
-	IsSkip bool  // 如果为true 忽视重复
+	IsSkip bool  // 如果为true 忽视重复 false 默认只会开启一个
 	Callback  func(par ...interface{}) (err error)
+	Once bool // true 常驻只执行一次
 }
 
 // 执行的结果
@@ -37,44 +40,56 @@ type JobResult struct {
 
 type Scheduler struct {
 	jobPlanTable map[string]*JobSchedulerPlan // 执行计划表
+	jobPlanTableInit map[string]*Job  // 只会执行一次的脚本
 	is_stop bool
 	sync.RWMutex
-	//ctx context.Context
-	//cancel context.CancelFunc
+	ctx context.Context
+	cancel context.CancelFunc
 }
 
 
 var g_jobexecuting map[string]string
 var g_JobResult_chan chan *JobResult
 func init()  {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-
+	//log.SetFlags(log.Lshortfile | log.LstdFlags)
 }
 
 func InitCrontab(jobs []Job) (*Scheduler){
 
 	g_jobexecuting = make(map[string]string)
 	g_JobResult_chan = make(chan *JobResult,100)
-	//ctx, cancel := context.WithCancel(context.Background())
-
 	model := &Scheduler{
 		jobPlanTable: make(map[string]*JobSchedulerPlan),
+		jobPlanTableInit: make(map[string]*Job),
 		is_stop: false,
-		//ctx: ctx,
-		//cancel: cancel,
 	}
 
-
+	model.ctx, model.cancel = context.WithCancel(context.Background())
 
 	for _, job := range jobs {
 		if job.IsOpen {
-			model.jobPlanTable[job.Name], _ = BuildSchedulerPlan(job)
+			if job.Once == false {
+				model.jobPlanTable[job.Name], _ = BuildSchedulerPlan(job)
+			}else{
+				model.once(job)
+			}
 		}
 
 	}
 
 	go model.SchedulerLoop()
 	return model
+}
+
+func (c *Scheduler)once(job Job) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Println(errors.New("灾难错误"), r)
+			}
+		}()
+		job.Callback(job.Name,job.Par,c.ctx)
+	}()
 }
 
 // 构建任务执行计划
@@ -165,7 +180,7 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
 
 			if scheduler.getStop() {
-				log.Println("脚本停止了，请检查数据是否跑完!")
+				//log.Println("脚本停止了，请检查数据是否跑完!")
 				goto LOOP
 			}
 			// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
@@ -244,6 +259,8 @@ func (scheduler *Scheduler) Stop()  {
 	scheduler.Lock()
 	defer scheduler.Unlock()
 	scheduler.is_stop = true
+	// 取消一次性脚本
+	scheduler.cancel()
 }
 
 

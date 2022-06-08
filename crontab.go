@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gorhill/cronexpr"
 	"log"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -85,7 +86,7 @@ func (c *Scheduler)once(job Job) {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Println(errors.New("灾难错误"), r)
+				log.Println(errors.New("灾难错误"), r,string(debug.Stack()))
 			}
 		}()
 		job.Callback(job.Name,job.Par,c.ctx)
@@ -200,7 +201,8 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 			go func(jobPlan *JobSchedulerPlan) { // go 需要传值进来
 				defer func() {
 						if r := recover(); r != nil {
-							log.Println(errors.New("灾难错误"), r)
+							log.Println(errors.New("灾难错误"), r,string(debug.Stack()))
+
 						}
 					}()
 

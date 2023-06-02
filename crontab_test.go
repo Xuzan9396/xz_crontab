@@ -7,57 +7,60 @@ import (
 	"time"
 )
 
-func Test_crontab(t *testing.T)  {
+func Test_crontab(t *testing.T) {
 
 	jobs := []Job{
 		{
-			Name:     "test",
+			Name: "test",
 			Par:  "1",
 			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
 			CronExpr: "*/5 * * * * * *", // 5s执行一次
-			IsOpen: false, // true 开启脚本 false 关闭脚本
-			Callback: callback,  // 设置你调用的函数
+			IsOpen:   false,             // true 开启脚本 false 关闭脚本
+			Callback: callback,          // 设置你调用的函数
 		},
 
 		{
-			Name:     "test2",
+			Name: "test2",
 			Par:  "1",
 			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
 			CronExpr: "*/11 * * * * * *", // 5s执行一次
-			IsOpen: false, // true 开启脚本 false 关闭脚本
-			Callback: callback,  // 设置你调用的函数
+			IsOpen:   true,               // true 开启脚本 false 关闭脚本
+			Callback: callback,           // 设置你调用的函数
 		},
 
 		{
 			Name:     "test3",
-			Par:  "1",
-			IsOpen: true, // true 开启脚本 false 关闭脚本
-			Callback: OnceTest2,  // 设置你调用的函数
-			Once: true, // 只执行一次
+			Par:      "1",
+			IsOpen:   false,     // true 开启脚本 false 关闭脚本
+			Callback: OnceTest2, // 设置你调用的函数
+			Once:     true,      // 只执行一次
 		},
-
 	}
 	model := InitCrontab(jobs)
+	go func() {
+		for {
+			select {
+			case nextTime := <-model.NextChGet():
+				log.Println(nextTime)
+			}
+		}
+	}()
 
-	time.Sleep(20*time.Second)
+	time.Sleep(20 * time.Second)
 	model.Stop()
 
-	select {
-
-	}
-
+	select {}
 
 }
 
-func OnceTest(par ...interface{})(err error)  {
+func OnceTest(par ...interface{}) (err error) {
 	log.Println("只执行一次")
 	return nil
 }
 
-
-func OnceTest2(par ...interface{})(err error)  {
+func OnceTest2(par ...interface{}) (err error) {
 	res := par[2].(context.Context)
-	for{
+	for {
 		select {
 		case <-res.Done():
 			log.Println("停止了!")
@@ -71,9 +74,8 @@ func OnceTest2(par ...interface{})(err error)  {
 	return
 }
 
-
-func callback(par ...interface{})(err error )  {
-	log.Println("回调参数",par[0],par[1])
-	time.Sleep(6*time.Second)
+func callback(par ...interface{}) (err error) {
+	log.Println("回调参数", par[0], par[1])
+	time.Sleep(6 * time.Second)
 	return
 }

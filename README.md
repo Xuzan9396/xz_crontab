@@ -65,7 +65,15 @@ func Test_crontab(t *testing.T)  {
 
 	}
 	model := InitCrontab(jobs)
+	go func() {
+		for {
+			select {
+			case timeDate := <-model.NextChGet():
+				log.Println("下次执行时间", timeDate)
+			}
+		}
 
+	}()
 	time.Sleep(20*time.Second)
 	model.Stop()
 

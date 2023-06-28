@@ -69,7 +69,7 @@ func InitCrontab(jobs []Job) *Scheduler {
 	for _, job := range jobs {
 		if job.IsOpen {
 			if job.Once == false {
-				model.jobPlanTable[job.Name], _ = BuildSchedulerPlan(job)
+				model.jobPlanTable[job.Name], _ = buildSchedulerPlan(job)
 			} else {
 				model.once(job)
 			}
@@ -96,7 +96,7 @@ func (c *Scheduler) once(job Job) {
 }
 
 // 构建任务执行计划
-func BuildSchedulerPlan(job Job) (jobSchedulerPlan *JobSchedulerPlan, err error) {
+func buildSchedulerPlan(job Job) (jobSchedulerPlan *JobSchedulerPlan, err error) {
 	var (
 		expr *cronexpr.Expression
 	)

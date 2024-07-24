@@ -61,7 +61,7 @@ func InitCrontab(jobs []Job) *Scheduler {
 		jobPlanTable:     make(map[string]*JobSchedulerPlan),
 		jobPlanTableInit: make(map[string]*Job),
 		is_stop:          false,
-		nextCh:           make(chan string),
+		nextCh:           make(chan string, 10),
 	}
 
 	model.ctx, model.cancel = context.WithCancel(context.Background())

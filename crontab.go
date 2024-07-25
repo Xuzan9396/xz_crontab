@@ -13,19 +13,21 @@ import (
 
 // 任务调度计划表
 type JobSchedulerPlan struct {
-	Job      *Job
-	Expr     *cronexpr.Expression // 解析好的cronnxpr 表达式
-	NextTime time.Time
+	Job       *Job
+	Expr      *cronexpr.Expression // 解析好的cronnxpr 表达式
+	NextTime  time.Time
+	NextTimeN []time.Time
 }
 
 type Job struct {
-	Name     string // 任务名
-	Par      string // 额外参数
-	CronExpr string // cron 表达式
-	IsOpen   bool
-	IsSkip   bool // 如果为true 忽视重复 false 默认只会开启一个
-	Callback func(par ...interface{}) (err error)
-	Once     bool // true 常驻只执行一次
+	Name      string // 任务名
+	Par       string // 额外参数
+	CronExpr  string // cron 表达式
+	IsOpen    bool
+	IsSkip    bool // 如果为true 忽视重复 false 默认只会开启一个
+	Callback  func(par ...interface{}) (err error)
+	Once      bool // true 常驻只执行一次
+	ShowNextN uint // 显示几个下次执行的时间，默认为1个
 }
 
 // 执行的结果
@@ -61,7 +63,7 @@ func InitCrontab(jobs []Job) *Scheduler {
 		jobPlanTable:     make(map[string]*JobSchedulerPlan),
 		jobPlanTableInit: make(map[string]*Job),
 		is_stop:          false,
-		nextCh:           make(chan string, 10),
+		nextCh:           make(chan string, 100),
 	}
 
 	model.ctx, model.cancel = context.WithCancel(context.Background())
@@ -104,17 +106,24 @@ func buildSchedulerPlan(job Job) (jobSchedulerPlan *JobSchedulerPlan, err error)
 		fmt.Println(err, "解析错误了")
 		return
 	}
-	nextNow := expr.Next(time.Now())
+	nowT := time.Now()
+	nextNow := expr.Next(nowT)
 	now := time.Now()
 	if nextNow.Before(now) {
 		err = errors.New("时间过期了")
 		return
 	}
 
+	var nextN []time.Time
+	if job.ShowNextN > 0 {
+		nextN = expr.NextN(now, job.ShowNextN)
+	}
+
 	jobSchedulerPlan = &JobSchedulerPlan{
-		Job:      &job,
-		Expr:     expr,
-		NextTime: nextNow,
+		Job:       &job,
+		Expr:      expr,
+		NextTime:  nextNow,
+		NextTimeN: nextN,
 	}
 	return
 
@@ -134,7 +143,7 @@ func (scheduler *Scheduler) SchedulerLoop() {
 	)
 
 	// 计算调度的时间
-	schedulerAfter = scheduler.TrySchedule()
+	schedulerAfter = scheduler.TrySchedule(true)
 	// 调度延时器
 	schedulerTimer = time.NewTimer(schedulerAfter)
 	// 调度延迟事件
@@ -147,14 +156,14 @@ func (scheduler *Scheduler) SchedulerLoop() {
 		}
 
 		// 重新调度一次任务
-		schedulerAfter = scheduler.TrySchedule()
+		schedulerAfter = scheduler.TrySchedule(false)
 		// 重置任务定时器
 		schedulerTimer.Reset(schedulerAfter)
 	}
 }
 
 // 尝试遍历所有任务
-func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
+func (scheduler *Scheduler) TrySchedule(isInit bool) (schedulerAfter time.Duration) {
 	var (
 		//jobPlan  *JobSchedulerPlan
 		now      time.Time
@@ -178,18 +187,27 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 			continue
 		}
 		timeLayout := "2006-01-02 15:04:05" //转化所需模板
-		datetime := time.Unix(jobPlan.NextTime.Unix(), 0).Format(timeLayout)
-
-		select {
-		case scheduler.nextCh <- fmt.Sprintf("%s,下次执行的时间:%s", jobPlan.Job.Name, datetime):
-		default:
+		if isInit {                         // 不需要下次某一个脚本触发的时候吧所有发过来了，只要发当次新的就行
+			if len(jobPlan.NextTimeN) > 0 {
+				for i, timan := range jobPlan.NextTimeN {
+					select {
+					case scheduler.nextCh <- fmt.Sprintf("%s,初始化下次执行的时间第:%d次，%s", jobPlan.Job.Name, i+1, timan.Format(timeLayout)):
+					default:
+					}
+				}
+			} else {
+				datetime := jobPlan.NextTime.Format(timeLayout)
+				select {
+				case scheduler.nextCh <- fmt.Sprintf("%s,初始化下次执行的时间第:1次，%s", jobPlan.Job.Name, datetime):
+				default:
+				}
+			}
 
 		}
-		//log.Println(jobPlan.Job.Name, "下次执行的时间", datetime)
+
 		if jobPlan.NextTime.Before(now) || jobPlan.NextTime.Equal(now) {
 
 			if scheduler.getStop() {
-				//log.Println("脚本停止了，请检查数据是否跑完!")
 				goto LOOP
 			}
 			// 执行的任务可能运行很久, 1分钟会调度60次，但是只能执行1次, 防止并发！
@@ -215,7 +233,7 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 				}()
 
 				startTing := time.Now()
-				err := jobPlan.Job.Callback(jobPlan.Job.Name, jobPlan.Job.Par, datetime)
+				err := jobPlan.Job.Callback(jobPlan.Job.Name, jobPlan.Job.Par, jobPlan.NextTime.Format(timeLayout))
 				if err != nil {
 					log.Println(jobPlan.Job.Name, err)
 				}
@@ -228,7 +246,13 @@ func (scheduler *Scheduler) TrySchedule() (schedulerAfter time.Duration) {
 
 			// 更新下次执行时间
 			jobPlan.NextTime = jobPlan.Expr.Next(now)
-
+			if !isInit { // 运行后更新下一次时间
+				datetime := jobPlan.NextTime.Format(timeLayout)
+				select {
+				case scheduler.nextCh <- fmt.Sprintf("%s,下次执行的时间:%s", jobPlan.Job.Name, datetime):
+				default:
+				}
+			}
 		}
 
 		if nearTime == nil || jobPlan.NextTime.Before(*nearTime) {

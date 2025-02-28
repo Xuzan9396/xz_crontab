@@ -9,7 +9,12 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+	_ "time/tzdata"
 )
+
+var LOC, _ = time.LoadLocation("Local")
+
+//var LOC, _ = time.LoadLocation("Asia/Kolkata")
 
 // 任务调度计划表
 type JobSchedulerPlan struct {
@@ -106,9 +111,9 @@ func buildSchedulerPlan(job Job) (jobSchedulerPlan *JobSchedulerPlan, err error)
 		fmt.Println(err, "解析错误了")
 		return
 	}
-	nowT := time.Now()
+	nowT := time.Now().In(LOC)
 	nextNow := expr.Next(nowT)
-	now := time.Now()
+	now := time.Now().In(LOC)
 	if nextNow.Before(now) {
 		err = errors.New("时间过期了")
 		return
@@ -176,7 +181,7 @@ func (scheduler *Scheduler) TrySchedule(isInit bool) (schedulerAfter time.Durati
 		return
 	}
 
-	now = time.Now()
+	now = time.Now().In(LOC)
 
 	for key, jobPlan := range scheduler.jobPlanTable {
 
@@ -232,12 +237,12 @@ func (scheduler *Scheduler) TrySchedule(isInit bool) (schedulerAfter time.Durati
 					}
 				}()
 
-				startTing := time.Now()
+				startTing := time.Now().In(LOC)
 				err := jobPlan.Job.Callback(jobPlan.Job.Name, jobPlan.Job.Par, jobPlan.NextTime.Format(timeLayout))
 				if err != nil {
 					log.Println(jobPlan.Job.Name, err)
 				}
-				endTime := time.Now()
+				endTime := time.Now().In(LOC)
 
 				pushg_JobResult_chan(jobPlan.Job.Name, startTing, endTime, err)
 
@@ -277,7 +282,6 @@ func pushg_JobResult_chan(name string, startTime, endTime time.Time, err error) 
 
 func dealResult(result *JobResult) {
 	delete(g_jobexecuting, result.Name)
-	//log.Println("执行时间删除",result.EndTime.Unix() - result.EndTime.Unix(),result.Name)
 }
 
 // 关闭脚本

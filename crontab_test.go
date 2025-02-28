@@ -1,7 +1,8 @@
-package xz_crontab
+package xz_crontab_test
 
 import (
 	"context"
+	"github.com/Xuzan9396/xz_crontab"
 	"log"
 	"testing"
 	"time"
@@ -9,35 +10,36 @@ import (
 
 func Test_crontab(t *testing.T) {
 
-	jobs := []Job{
+	jobs := []xz_crontab.Job{
 		{
 			Name: "test",
 			Par:  "1",
 			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
-			CronExpr:  "*/30 * * * * * *", // 5s执行一次
-			IsOpen:    true,               // true 开启脚本 false 关闭脚本
-			Callback:  callback,           // 设置你调用的函数
+			//CronExpr:  "*/30 * * * * * *", // 5s执行一次
+			CronExpr:  "0 55 14 * * * *", // 5s执行一次
+			IsOpen:    true,              // true 开启脚本 false 关闭脚本
+			Callback:  callback,          // 设置你调用的函数
 			ShowNextN: 3,
 		},
 
-		{
-			Name: "test2",
-			Par:  "1",
-			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
-			CronExpr: "*/11 * * * * * *", // 5s执行一次
-			IsOpen:   true,               // true 开启脚本 false 关闭脚本
-			Callback: callback,           // 设置你调用的函数
-		},
-
-		{
-			Name:     "test3",
-			Par:      "1",
-			IsOpen:   false,     // true 开启脚本 false 关闭脚本
-			Callback: OnceTest2, // 设置你调用的函数
-			Once:     true,      // 只执行一次
-		},
+		//{
+		//	Name: "test2",
+		//	Par:  "1",
+		//	//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
+		//	CronExpr: "*/11 * * * * * *", // 5s执行一次
+		//	IsOpen:   true,               // true 开启脚本 false 关闭脚本
+		//	Callback: callback,           // 设置你调用的函数
+		//},
+		//
+		//{
+		//	Name:     "test3",
+		//	Par:      "1",
+		//	IsOpen:   false,     // true 开启脚本 false 关闭脚本
+		//	Callback: OnceTest2, // 设置你调用的函数
+		//	Once:     true,      // 只执行一次
+		//},
 	}
-	model := InitCrontab(jobs)
+	model := xz_crontab.InitCrontab(jobs)
 	go func() {
 		for {
 			select {

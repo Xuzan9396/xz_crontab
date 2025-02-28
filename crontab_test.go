@@ -81,3 +81,34 @@ func callback(par ...interface{}) (err error) {
 	log.Println("回调参数", par[0], par[1])
 	return
 }
+
+func Test_crontabLoc(t *testing.T) {
+
+	jobs := []xz_crontab.Job{
+		{
+			Name: "test",
+			Par:  "1",
+			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
+			//CronExpr:  "*/30 * * * * * *", // 5s执行一次
+			CronExpr:  "0 55 16 * * * *", // 5s执行一次
+			IsOpen:    true,              // true 开启脚本 false 关闭脚本
+			Callback:  callback,          // 设置你调用的函数
+			ShowNextN: 3,
+		},
+	}
+	model := xz_crontab.InitCrontab(jobs, xz_crontab.WithLoc("Asia/Kolkata"))
+	go func() {
+		for {
+			select {
+			case nextTime := <-model.NextChGet():
+				log.Println(nextTime)
+			}
+		}
+	}()
+
+	time.Sleep(20 * time.Second)
+	model.Stop()
+
+	select {}
+
+}

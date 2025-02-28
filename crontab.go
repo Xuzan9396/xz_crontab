@@ -22,6 +22,7 @@ type JobSchedulerPlan struct {
 	Expr      *cronexpr.Expression // 解析好的cronnxpr 表达式
 	NextTime  time.Time
 	NextTimeN []time.Time
+	Loc       *time.Location
 }
 
 type Job struct {
@@ -56,11 +57,10 @@ type Scheduler struct {
 var g_jobexecuting map[string]string
 var g_JobResult_chan chan *JobResult
 
-func init() {
-	//log.SetFlags(log.Lshortfile | log.LstdFlags)
-}
+// 定义配置函数类型
+type CrontabConfigFunc func(*Scheduler)
 
-func InitCrontab(jobs []Job) *Scheduler {
+func InitCrontab(jobs []Job, opts ...CrontabConfigFunc) *Scheduler {
 
 	g_jobexecuting = make(map[string]string)
 	g_JobResult_chan = make(chan *JobResult, 100)
@@ -69,6 +69,10 @@ func InitCrontab(jobs []Job) *Scheduler {
 		jobPlanTableInit: make(map[string]*Job),
 		is_stop:          false,
 		nextCh:           make(chan string, 100),
+	}
+	// 应用所有传入的配置函数
+	for _, opt := range opts {
+		opt(model)
 	}
 
 	model.ctx, model.cancel = context.WithCancel(context.Background())
@@ -87,6 +91,19 @@ func InitCrontab(jobs []Job) *Scheduler {
 	go model.SchedulerLoop()
 	return model
 }
+
+func WithLoc(locStr string) CrontabConfigFunc {
+	return func(s *Scheduler) {
+
+		loc, err := time.LoadLocation(locStr)
+		if err != nil {
+			log.Println("时区错误", err)
+			return
+		}
+		LOC = loc
+	}
+}
+
 func (c *Scheduler) NextChGet() chan string {
 	return c.nextCh
 }

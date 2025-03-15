@@ -2,7 +2,10 @@ package xz_crontab_test
 
 import (
 	"context"
+	"fmt"
 	"github.com/Xuzan9396/xz_crontab"
+	"github.com/Xuzan9396/zlog"
+	"github.com/gorhill/cronexpr"
 	"log"
 	"testing"
 	"time"
@@ -111,4 +114,34 @@ func Test_crontabLoc(t *testing.T) {
 
 	select {}
 
+}
+
+// 解析过期
+func Test_crontabParse(t *testing.T) {
+	var (
+		expr *cronexpr.Expression
+		err  error
+	)
+	if expr, err = cronexpr.Parse("31 46 0 14 3 * 2025"); err != nil {
+		fmt.Println(err, "解析错误了")
+		return
+	}
+	nowT := time.Now().In(zlog.LOC)
+	nextNow := expr.Next(nowT)
+	now := time.Now().In(zlog.LOC)
+	if nextNow.Before(now) {
+		t.Error("时间过期了")
+		//return
+	}
+	t.Log(nextNow.Unix())
+
+	var nextN []time.Time
+	nextN = expr.NextN(now, 3)
+	if len(nextN) == 0 {
+		t.Error("后面没数据时间过期了")
+		//return
+	}
+	for _, v := range nextN {
+		fmt.Println(v)
+	}
 }

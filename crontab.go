@@ -172,6 +172,9 @@ func (scheduler *Scheduler) SchedulerLoop() {
 
 	for {
 		select {
+		case <-scheduler.ctx.Done():
+			log.Println("--定时任务监听器已停止时间goroutine--")
+			return
 		case <-schedulerTimer.C:
 		case result := <-g_JobResult_chan:
 			dealResult(result)

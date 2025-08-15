@@ -3,12 +3,13 @@ package xz_crontab_test
 import (
 	"context"
 	"fmt"
-	"github.com/Xuzan9396/xz_crontab"
-	"github.com/Xuzan9396/zlog"
-	"github.com/gorhill/cronexpr"
 	"log"
 	"testing"
 	"time"
+
+	"github.com/Xuzan9396/xz_crontab"
+	"github.com/Xuzan9396/zlog"
+	"github.com/gorhill/cronexpr"
 )
 
 func Test_crontab(t *testing.T) {
@@ -81,6 +82,7 @@ func OnceTest2(par ...interface{}) (err error) {
 }
 
 func callback(par ...interface{}) (err error) {
+	time.Sleep(time.Second)
 	log.Println("回调参数", par[0], par[1])
 	return
 }
@@ -112,7 +114,9 @@ func Test_crontabLoc(t *testing.T) {
 	time.Sleep(20 * time.Second)
 	model.Stop()
 
-	select {}
+	// 给goroutine一点时间来处理Stop信号
+	time.Sleep(2 * time.Second)
+	log.Println("测试完成")
 
 }
 
@@ -144,4 +148,55 @@ func Test_crontabParse(t *testing.T) {
 	for _, v := range nextN {
 		fmt.Println(v)
 	}
+}
+
+func Test_crontab_loop(t *testing.T) {
+
+	jobs := []xz_crontab.Job{
+		{
+			Name: "test",
+			Par:  "1",
+			//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
+			//CronExpr:  "*/30 * * * * * *", // 5s执行一次
+			IsOpen:   true, // true 开启脚本 false 关闭脚本
+			Once:     true, // 只执行一次
+			LoopBool: true,
+			LoopTime: 2 * time.Second,
+			Callback: callback, // 设置你调用的函数
+		},
+
+		//{
+		//	Name: "test2",
+		//	Par:  "1",
+		//	//CronExpr: "45 59 23 * * * *", // 23 点 59分 45 秒
+		//	CronExpr: "*/11 * * * * * *", // 5s执行一次
+		//	IsOpen:   true,               // true 开启脚本 false 关闭脚本
+		//	Callback: callback,           // 设置你调用的函数
+		//},
+		//
+		//{
+		//	Name:     "test3",
+		//	Par:      "1",
+		//	IsOpen:   false,     // true 开启脚本 false 关闭脚本
+		//	Callback: OnceTest2, // 设置你调用的函数
+		//	Once:     true,      // 只执行一次
+		//},
+	}
+	model := xz_crontab.InitCrontab(jobs)
+	go func() {
+		for {
+			select {
+			case nextTime := <-model.NextChGet():
+				log.Println(nextTime)
+			}
+		}
+	}()
+
+	time.Sleep(20 * time.Second)
+	model.Stop()
+
+	// 给goroutine一点时间来处理Stop信号
+	time.Sleep(2 * time.Second)
+	log.Println("测试完成")
+
 }

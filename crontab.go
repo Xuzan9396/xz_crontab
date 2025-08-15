@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/gorhill/cronexpr"
 	"log"
 	"runtime/debug"
 	"sync"
 	"time"
 	_ "time/tzdata"
+
+	"github.com/gorhill/cronexpr"
 )
 
 var LOC, _ = time.LoadLocation("Local")
@@ -26,14 +27,17 @@ type JobSchedulerPlan struct {
 }
 
 type Job struct {
-	Name      string // 任务名
-	Par       string // 额外参数
-	CronExpr  string // cron 表达式
-	IsOpen    bool
-	IsSkip    bool // 如果为true 忽视重复 false 默认只会开启一个
-	Callback  func(par ...interface{}) (err error)
-	Once      bool // true 常驻只执行一次
-	ShowNextN uint // 显示几个下次执行的时间，默认为1个
+	Name         string // 任务名
+	Par          string // 额外参数
+	CronExpr     string // cron 表达式
+	IsOpen       bool
+	IsSkip       bool // 如果为true 忽视重复 false 默认只会开启一个
+	Callback     func(par ...interface{}) (err error)
+	LoopInitTime time.Duration // 一次性开始的睡眠时间，防止脚本一开始就启动执行
+	LoopTime     time.Duration // 循环执行的时间间隔
+	LoopBool     bool          // true 循环执行
+	Once         bool          // true 常驻只执行一次
+	ShowNextN    uint          // 显示几个下次执行的时间，默认为1个
 }
 
 // 执行的结果
@@ -82,7 +86,12 @@ func InitCrontab(jobs []Job, opts ...CrontabConfigFunc) *Scheduler {
 			if job.Once == false {
 				model.jobPlanTable[job.Name], _ = buildSchedulerPlan(job)
 			} else {
-				model.once(job)
+				if job.LoopBool {
+					model.loop_once(job)
+				} else {
+					model.once(job)
+
+				}
 			}
 		}
 
@@ -116,6 +125,31 @@ func (c *Scheduler) once(job Job) {
 			}
 		}()
 		job.Callback(job.Name, job.Par, c.ctx)
+	}()
+}
+
+func (c *Scheduler) loop_once(job Job) {
+	if job.LoopTime == 0 {
+		panic("panic loop_once job.LoopTime is 0")
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Println(errors.New("灾难错误"), r, string(debug.Stack()))
+			}
+		}()
+		time.Sleep(job.LoopInitTime)
+		for {
+			select {
+			case <-c.ctx.Done():
+				log.Println("--定时任务监听器已停止时间goroutine--")
+				return
+			default:
+				time.Sleep(job.LoopTime)
+				job.Callback(job.Name, job.Par, c.ctx)
+
+			}
+		}
 	}()
 }
 

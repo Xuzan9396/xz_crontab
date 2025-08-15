@@ -130,7 +130,8 @@ func (c *Scheduler) once(job Job) {
 
 func (c *Scheduler) loop_once(job Job) {
 	if job.LoopTime == 0 {
-		panic("panic loop_once job.LoopTime is 0")
+		//panic("panic loop_once job.LoopTime is 0")
+		log.Println("目前脚本:" + job.Name + ",没有设置循环时间,请检查配置")
 	}
 	go func() {
 		defer func() {
@@ -142,7 +143,7 @@ func (c *Scheduler) loop_once(job Job) {
 		for {
 			select {
 			case <-c.ctx.Done():
-				log.Println("--定时任务监听器已停止时间goroutine--")
+				log.Println("--定时任务监听器已停止时间goroutine_once--")
 				return
 			default:
 				time.Sleep(job.LoopTime)
